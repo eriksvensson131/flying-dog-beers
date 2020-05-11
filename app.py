@@ -1,63 +1,61 @@
+import pandas as pd
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-import plotly.graph_objs as go
+from dash.dependencies import Input, Output
 
-########### Define your variables
-beers=['Chesapeake Stout', 'Snake Dog IPA', 'Imperial Porter', 'Double Dog IPA']
-ibu_values=[35, 60, 85, 75]
-abv_values=[5.4, 7.1, 9.2, 4.3]
-color1='lightblue'
-color2='darkgreen'
-mytitle='Beer Comparison'
-tabtitle='beer!'
-myheading='Flying Dog Beers'
-label1='IBU'
-label2='ABV'
-githublink='https://github.com/austinlasseter/flying-dog-beers'
-sourceurl='https://www.flyingdog.com/beers/'
-
-########### Set up the chart
-bitterness = go.Bar(
-    x=beers,
-    y=ibu_values,
-    name=label1,
-    marker={'color':color1}
-)
-alcohol = go.Bar(
-    x=beers,
-    y=abv_values,
-    name=label2,
-    marker={'color':color2}
-)
-
-beer_data = [bitterness, alcohol]
-beer_layout = go.Layout(
-    barmode='group',
-    title = mytitle
-)
-
-beer_fig = go.Figure(data=beer_data, layout=beer_layout)
-
-
-########### Initiate the app
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-server = app.server
-app.title=tabtitle
 
-########### Set up the layout
-app.layout = html.Div(children=[
-    html.H1(myheading),
-    dcc.Graph(
-        id='flyingdog',
-        figure=beer_fig
-    ),
-    html.A('Code on Github', href=githublink),
-    html.Br(),
-    html.A('Data Source', href=sourceurl),
-    ]
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+
+df = pd.read_csv('income_per_person_gdppercapita_ppp_inflation_adjusted.csv')
+countries = list(df.country)
+
+app.layout = html.Div([
+    dcc.Graph(id='gdp-by-year'),
+    html.Label('Select countries'),
+    dcc.Dropdown(
+        id='country-selector',
+        options=[
+            {'label': country, 'value': country} for country in countries
+        ],
+        value=['Sweden', 'Denmark', 'United States', 'India', 'China'],
+        multi=True
+    )
+])
+
+
+@app.callback(
+    Output(component_id='gdp-by-year', component_property='figure'),
+    [Input(component_id='country-selector', component_property='value')]
 )
+def update_figure(selected_countries):
+    df_select = df[df['country'].isin(selected_countries)]
+    years = df_select.columns[100:-18]
+    long_df = pd.melt(df_select, id_vars='country', value_vars=years, var_name='year', value_name='gdp')
+    return {
+        'data': [
+            dict(
+                x=long_df[long_df['country'] == i]['year'],
+                y=long_df[long_df['country'] == i]['gdp'],
+                mode='line',
+                opacity=1.0,
+                marker={
+                    'size': 1,
+                    'line': {'width': 0.2, 'color': 'white'}
+                },
+                name=i
+            ) for i in long_df.country.unique()
+        ],
+        'layout': dict(
+            xaxis={'title': 'year'},
+            yaxis={'type': 'log', 'title': 'inflation adjusted gdp per capita'},
+            margin={'l': 40, 'b': 40, 't': 10, 'r': 10},
+            legend={'x': 0, 'y': 1},
+            hovermode='closest'
+        )
+    }
+
 
 if __name__ == '__main__':
-    app.run_server()
+    app.run_server(debug=True)
